@@ -222,21 +222,12 @@ function showSyncPopover() {
   popover.id    = 'sync-popover';
   popover.innerHTML = `
     <div class="sp-email">${esc(currentUser.email)}</div>
-    <button class="sp-refresh"><i class="ti ti-refresh"></i> Pull latest changes</button>
     <button class="sp-signout">Sign out</button>`;
   document.body.appendChild(popover);
 
   const rect = btn.getBoundingClientRect();
   popover.style.top   = (rect.bottom + 8) + 'px';
   popover.style.right = (window.innerWidth - rect.right) + 'px';
-
-  popover.querySelector('.sp-refresh').addEventListener('click', async () => {
-    popover.remove();
-    updateSyncBtn('syncing');
-    const updated = await loadFromCloud();
-    if (updated) fullRender();
-    updateSyncBtn('synced');
-  });
 
   popover.querySelector('.sp-signout').addEventListener('click', async () => {
     popover.remove();
@@ -312,11 +303,21 @@ function showAuthOverlay() {
 async function initAuth() {
   fullRender(); // always render local state immediately
 
-  // Wire up sync button regardless of Supabase state
   document.getElementById('syncBtn').addEventListener('click', () => {
     if (!sbReady) return;
     if (currentUser) showSyncPopover();
     else { sessionStorage.removeItem('auth_skipped'); showAuthOverlay(); }
+  });
+
+  document.getElementById('refreshBtn').addEventListener('click', async () => {
+    if (!currentUser) return;
+    const btn = document.getElementById('refreshBtn');
+    btn.disabled = true;
+    updateSyncBtn('syncing');
+    const updated = await loadFromCloud();
+    if (updated) fullRender();
+    updateSyncBtn('synced');
+    btn.disabled = false;
   });
 
   if (!sbReady || !sb) { showAuthOverlay(); return; }
@@ -327,8 +328,9 @@ async function initAuth() {
     if (session) {
       currentUser = session.user;
       const updated = await loadFromCloud();
-      if (!updated) doSync(); // push local data up if cloud isn't newer
+      if (!updated) doSync();
       updateSyncBtn('synced');
+      document.getElementById('refreshBtn').style.display = '';
       fullRender();
     } else {
       updateSyncBtn('offline');
@@ -342,10 +344,12 @@ async function initAuth() {
         const updated = await loadFromCloud();
         if (!updated) doSync();
         updateSyncBtn('synced');
+        document.getElementById('refreshBtn').style.display = '';
         fullRender();
       } else if (event === 'SIGNED_OUT') {
         currentUser = null;
         updateSyncBtn('offline');
+        document.getElementById('refreshBtn').style.display = 'none';
       }
     });
 

@@ -15,9 +15,14 @@
           <h1>Budget</h1>
           <p class="subtitle">Plan your gifts, track your budget</p>
         </div>
-        <button id="syncBtn" class="sync-btn" title="Sync" aria-label="Sync status">
-          <i class="ti ti-cloud-off"></i>
-        </button>
+        <div class="header-btns">
+          <button id="refreshBtn" class="refresh-btn" title="Pull latest changes" aria-label="Pull latest changes" style="display:none">
+            <i class="ti ti-refresh"></i>
+          </button>
+          <button id="syncBtn" class="sync-btn" title="Sync" aria-label="Sync status">
+            <i class="ti ti-cloud-off"></i>
+          </button>
+        </div>
       </div>
     </header>
     <div class="tabs-wrap" id="tabsWrap"></div>

@@ -48,6 +48,24 @@ body {
 .app-header h1 { font-size: 22px; font-weight: 500; }
 .app-header .subtitle { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
 
+.header-btns { display: flex; align-items: center; gap: 4px; }
+
+.refresh-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 5px;
+  font-size: 20px;
+  color: var(--green);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  opacity: 0.8;
+  transition: opacity 0.15s;
+}
+.refresh-btn:hover  { opacity: 1; background: var(--bg-secondary); }
+.refresh-btn:disabled { opacity: 0.3; cursor: default; }
+
 .sync-btn {
   background: none;
   border: none;
