@@ -5,7 +5,7 @@ const CURRENCIES  = ['AUD', 'USD', 'BDT'];
 // ── Supabase config ────────────────────────────────────────────────────────
 // Replace these two values with your project's URL and anon key
 const SUPABASE_URL = 'https://cqivnqntpuhnraohrwfo.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_NFzOgMAak3jbGlvRviWuqQ_6EASCDz3';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNxaXZucW50cHVobnJhb2hyd2ZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1NjMxNDAsImV4cCI6MjA5NDEzOTE0MH0.iTO6dZhHtGZML2_vwoRxuTSm38aK2nfM8tQOsD01RdA';
 
 // ── Utilities ──────────────────────────────────────────────────────────────
 
