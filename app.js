@@ -16,7 +16,9 @@ function currencySymbol(trip) {
 }
 
 function fmt(n, trip) {
-  return currencySymbol(trip || { currency: 'AUD' }) + (parseFloat(n) || 0).toFixed(0);
+  const v = parseFloat(n) || 0;
+  const s = v % 1 === 0 ? v.toFixed(0) : parseFloat(v.toFixed(2)).toString();
+  return currencySymbol(trip || { currency: 'AUD' }) + s;
 }
 
 function personTotal(m)  { return (m.expenses || []).reduce((s, e) => s + (parseFloat(e.price) || 0), 0); }
@@ -245,7 +247,7 @@ function buildBudgetCard(trip) {
     <div class="budget-top">
       <div class="budget-left">
         <label>Total budget</label>
-        <input class="budget-input" type="number" min="0" step="1" value="${esc(trip.budget)}" aria-label="Budget" />
+        <input class="budget-input" type="number" min="0" step="any" value="${esc(trip.budget)}" aria-label="Budget" />
         <button class="currency-toggle" title="Click to change currency">${esc(trip.currency || 'AUD')}</button>
       </div>
       <div class="budget-stats">
@@ -288,7 +290,7 @@ function buildBudgetCard(trip) {
 function generatePrintContent(trip) {
   const sym = currencySymbol(trip);
   const { spent, rem, pct, barColor } = getBudgetStatus(trip);
-  const fmtA = n => sym + (parseFloat(n) || 0).toFixed(0);
+  const fmtA = n => { const v = parseFloat(n) || 0; return sym + (v % 1 === 0 ? v.toFixed(0) : parseFloat(v.toFixed(2)).toString()); };
   const remClass = rem < 0 ? 'danger' : rem < trip.budget * 0.1 ? 'warn' : 'ok';
 
   const groupsHTML = trip.groups.map(g => {
@@ -481,7 +483,7 @@ function buildExpenseRow(trip, m, e) {
   row.innerHTML = `
     <input class="expense-item-input" value="${esc(e.item)}" placeholder="Item" aria-label="Expense item" />
     <div class="expense-price-wrap">
-      <input type="number" class="expense-price-input" min="0" step="1" value="${e.price || 0}" aria-label="Price" />
+      <input type="number" class="expense-price-input" min="0" step="any" value="${e.price || 0}" aria-label="Price" />
       <span class="amt-label">${esc(trip.currency || 'AUD')}</span>
       <button class="icon-btn del" title="Remove expense" aria-label="Remove expense">
         <i class="ti ti-x" style="font-size:13px"></i>
