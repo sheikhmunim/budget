@@ -248,76 +248,52 @@ function showAuthOverlay() {
     <div class="auth-card">
       <div class="auth-top-icon"><i class="ti ti-cloud"></i></div>
       <h2>Sync across devices</h2>
-      <p>Enter your email to receive a 6-digit code — no password needed.</p>
-      <div id="auth-step1">
-        <input id="auth-email" type="email" placeholder="your@email.com" autocomplete="email" inputmode="email" />
-        <button id="auth-send-btn">Send code</button>
-        <button class="auth-skip" id="auth-skip-btn">Not now</button>
-      </div>
-      <div id="auth-step2" style="display:none">
-        <div class="auth-sent-icon"><i class="ti ti-mail-check"></i></div>
-        <p class="auth-sent-msg">Check your email for a 6-digit code and enter it below.</p>
-        <input id="auth-code" type="text" placeholder="123456" inputmode="numeric" maxlength="6" autocomplete="one-time-code" />
-        <button id="auth-verify-btn">Sign in</button>
-        <button class="auth-skip" id="auth-change-btn">Use a different email</button>
-      </div>
+      <p>Sign in to keep your budget in sync on every device.</p>
+      <input id="auth-email"    type="email"    placeholder="your@email.com" autocomplete="email"     inputmode="email"    />
+      <input id="auth-password" type="password" placeholder="Password"       autocomplete="current-password" />
+      <div id="auth-error" class="auth-error"></div>
+      <button id="auth-signin-btn">Sign in</button>
+      <button id="auth-signup-btn" class="auth-secondary">Create account</button>
+      <button class="auth-skip" id="auth-skip-btn">Not now</button>
     </div>`;
   document.body.appendChild(overlay);
 
-  const emailEl  = overlay.querySelector('#auth-email');
-  const codeEl   = overlay.querySelector('#auth-code');
-  const sendBtn  = overlay.querySelector('#auth-send-btn');
-  const verifyBtn= overlay.querySelector('#auth-verify-btn');
-  const step1    = overlay.querySelector('#auth-step1');
-  const step2    = overlay.querySelector('#auth-step2');
-  let   sentEmail = '';
+  const emailEl = overlay.querySelector('#auth-email');
+  const passEl  = overlay.querySelector('#auth-password');
+  const errEl   = overlay.querySelector('#auth-error');
+  const signIn  = overlay.querySelector('#auth-signin-btn');
+  const signUp  = overlay.querySelector('#auth-signup-btn');
 
-  emailEl.addEventListener('keydown', e => { if (e.key === 'Enter') sendBtn.click(); });
-  codeEl.addEventListener('keydown',  e => { if (e.key === 'Enter') verifyBtn.click(); });
+  function showErr(msg) { errEl.textContent = msg; errEl.style.display = 'block'; }
+  function clearErr()   { errEl.textContent = ''; errEl.style.display = 'none'; }
+  function setLoading(btn, loading, label) { btn.disabled = loading; btn.textContent = loading ? '…' : label; }
 
-  sendBtn.addEventListener('click', async () => {
+  passEl.addEventListener('keydown', e => { if (e.key === 'Enter') signIn.click(); });
+
+  signIn.addEventListener('click', async () => {
+    clearErr();
     const email = emailEl.value.trim();
-    if (!email) { emailEl.focus(); return; }
-    sendBtn.disabled    = true;
-    sendBtn.textContent = 'Sending…';
-    const { error } = await sb.auth.signInWithOtp({ email });
-    if (error) {
-      sendBtn.disabled    = false;
-      sendBtn.textContent = 'Send code';
-      alert('Error: ' + error.message);
-    } else {
-      sentEmail          = email;
-      step1.style.display = 'none';
-      step2.style.display = 'block';
-      codeEl.focus();
-    }
+    const pass  = passEl.value;
+    if (!email || !pass) { showErr('Please enter your email and password.'); return; }
+    setLoading(signIn, true, 'Sign in');
+    const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+    if (error) { showErr(error.message); setLoading(signIn, false, 'Sign in'); }
+    // on success, onAuthStateChange handles the rest
   });
 
-  verifyBtn.addEventListener('click', async () => {
-    const code = codeEl.value.trim();
-    if (code.length < 6) { codeEl.focus(); return; }
-    verifyBtn.disabled    = true;
-    verifyBtn.textContent = 'Verifying…';
-    const { error } = await sb.auth.verifyOtp({ email: sentEmail, token: code, type: 'email' });
-    if (error) {
-      verifyBtn.disabled    = false;
-      verifyBtn.textContent = 'Sign in';
-      codeEl.value = '';
-      alert('Wrong code — please try again.');
-    }
-    // on success, onAuthStateChange fires and handles the rest
+  signUp.addEventListener('click', async () => {
+    clearErr();
+    const email = emailEl.value.trim();
+    const pass  = passEl.value;
+    if (!email || !pass) { showErr('Please enter your email and password.'); return; }
+    if (pass.length < 6)  { showErr('Password must be at least 6 characters.'); return; }
+    setLoading(signUp, true, 'Create account');
+    const { error } = await sb.auth.signUp({ email, password: pass });
+    if (error) { showErr(error.message); setLoading(signUp, false, 'Create account'); }
+    // on success, onAuthStateChange handles the rest
   });
 
   overlay.querySelector('#auth-skip-btn').addEventListener('click', () => overlay.remove());
-
-  overlay.querySelector('#auth-change-btn').addEventListener('click', () => {
-    step1.style.display = 'block';
-    step2.style.display = 'none';
-    emailEl.value = '';
-    sendBtn.disabled    = false;
-    sendBtn.textContent = 'Send code';
-    emailEl.focus();
-  });
 }
 
 async function initAuth() {
