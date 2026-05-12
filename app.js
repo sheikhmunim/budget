@@ -3,7 +3,6 @@ const ICONS       = ["ti-users","ti-home","ti-heart","ti-star","ti-confetti","ti
 const CURRENCIES  = ['AUD', 'USD', 'BDT'];
 
 // ── Supabase config ────────────────────────────────────────────────────────
-// Replace these two values with your project's URL and anon key
 const SUPABASE_URL = 'https://cqivnqntpuhnraohrwfo.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNxaXZucW50cHVobnJhb2hyd2ZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1NjMxNDAsImV4cCI6MjA5NDEzOTE0MH0.iTO6dZhHtGZML2_vwoRxuTSm38aK2nfM8tQOsD01RdA';
 
@@ -11,6 +10,11 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 
 function uid()  { return Math.random().toString(36).slice(2, 9); }
 function esc(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function genShareCode() {
+  const chars = 'abcdefhjkmnprstuvwxyz23456789';
+  return Array.from({length: 6}, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+}
 
 function currencySymbol(trip) {
   switch (trip.currency || 'AUD') {
@@ -98,7 +102,7 @@ if (sbReady) {
   catch (e) { console.error('Supabase client failed to init:', e); }
 }
 
-// Debounced sync — fires 1.5 s after last change so rapid typing doesn't spam Supabase
+// Debounced sync — fires 1.5 s after last change
 let _syncTimer = null;
 function schedulSync() {
   if (!sbReady || !currentUser) return;
@@ -117,30 +121,87 @@ async function doSync() {
     const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000));
     const { error } = await Promise.race([upsertPromise, timeout]);
     if (error) console.error('Sync error:', error.message, error);
+
+    // Push all shared trips
+    await Promise.all(state.trips.filter(t => t.shareCode).map(pushSharedTrip));
   } catch (e) {
     console.error('Sync failed:', e.message);
   }
   updateSyncBtn('synced');
 }
 
+async function pushSharedTrip(trip) {
+  if (!currentUser || !trip.shareCode || !sb) return;
+  try {
+    const ts = new Date().toISOString();
+    const { error } = await sb.from('shared_trips')
+      .upsert({ code: trip.shareCode, state_json: trip, updated_at: ts }, { onConflict: 'code' });
+    if (!error) {
+      trip._ts = new Date(ts).getTime();
+      try { localStorage.setItem('giftplanner_v2', JSON.stringify(state)); } catch (_) {}
+    } else {
+      console.error('Shared trip push error:', error.message);
+    }
+  } catch (e) {
+    console.error('Shared trip push failed:', e.message);
+  }
+}
+
+async function pullSharedTrip(trip) {
+  if (!trip.shareCode || !sb) return null;
+  try {
+    const { data } = await sb.from('shared_trips')
+      .select('state_json, updated_at')
+      .eq('code', trip.shareCode)
+      .single();
+    if (!data) return null;
+    const remoteTs = new Date(data.updated_at).getTime();
+    if (remoteTs > (trip._ts || 0)) {
+      return { ...data.state_json, shareCode: trip.shareCode, _ts: remoteTs };
+    }
+    return null;
+  } catch (_) { return null; }
+}
+
 async function loadFromCloud() {
+  let anyUpdate = false;
+
+  // Pull private user state
   try {
     const { data } = await sb.from('user_state')
       .select('state_json, updated_at')
       .eq('user_id', currentUser.id)
       .single();
 
-    if (!data) { doSync(); return false; } // first sign-in — push local data up
+    if (!data) { doSync(); return false; }
 
     const remoteTs = new Date(data.updated_at).getTime();
     if (remoteTs > (state._ts || 0)) {
       const p = data.state_json;
       state = { activeId: p.activeId, trips: p.trips.map(t => ({ ...t, groups: hydrate(t.groups || []) })), _ts: remoteTs };
       try { localStorage.setItem('giftplanner_v2', JSON.stringify(state)); } catch (_) {}
-      return true; // state was updated from cloud
+      anyUpdate = true;
     }
-    return false; // nothing changed
-  } catch (_) { return false; }
+  } catch (_) {}
+
+  // Pull updates from collaborators on shared trips
+  const sharedTrips = state.trips.filter(t => t.shareCode);
+  for (const trip of sharedTrips) {
+    const updated = await pullSharedTrip(trip);
+    if (updated) {
+      const idx = state.trips.findIndex(t => t.id === trip.id);
+      if (idx !== -1) {
+        state.trips[idx] = { ...updated, groups: hydrate(updated.groups || []) };
+        anyUpdate = true;
+      }
+    }
+  }
+
+  if (anyUpdate) {
+    try { localStorage.setItem('giftplanner_v2', JSON.stringify(state)); } catch (_) {}
+  }
+
+  return anyUpdate;
 }
 
 function updateSyncBtn(s) {
@@ -220,7 +281,6 @@ function showAuthOverlay() {
     setLoading(signIn, true, 'Sign in');
     const { error } = await sb.auth.signInWithPassword({ email, password: pass });
     if (error) { showErr(error.message); setLoading(signIn, false, 'Sign in'); }
-    // on success, onAuthStateChange handles the rest
   });
 
   signUp.addEventListener('click', async () => {
@@ -232,14 +292,173 @@ function showAuthOverlay() {
     setLoading(signUp, true, 'Create account');
     const { error } = await sb.auth.signUp({ email, password: pass });
     if (error) { showErr(error.message); setLoading(signUp, false, 'Create account'); }
-    // on success, onAuthStateChange handles the rest
   });
 
   overlay.querySelector('#auth-skip-btn').addEventListener('click', () => overlay.remove());
 }
 
+// ── Share modal ────────────────────────────────────────────────────────────
+
+function showShareModal(trip) {
+  document.getElementById('share-modal-overlay')?.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'share-modal-overlay';
+
+  const isShared = !!trip.shareCode;
+  const isOwner  = !trip.shareOwnerId || trip.shareOwnerId === currentUser?.id;
+
+  overlay.innerHTML = `
+    <div class="share-modal-card">
+      <div class="smc-header">
+        <h2>${isShared ? 'Shared trip' : 'Share trip'}</h2>
+        <button class="smc-close icon-btn"><i class="ti ti-x"></i></button>
+      </div>
+      ${isShared ? `
+        <p class="smc-desc">Share this code — anyone who enters it can view and edit this trip.</p>
+        <div class="smc-code-wrap">
+          <span class="smc-code">${esc(trip.shareCode)}</span>
+          <button class="smc-copy icon-btn" title="Copy code"><i class="ti ti-copy"></i></button>
+        </div>
+        <button class="smc-leave">${isOwner ? 'Stop sharing' : 'Leave shared trip'}</button>
+      ` : `
+        <p class="smc-desc">Generate a code to share this trip. Anyone with the code can view and edit it.</p>
+        <button class="smc-generate">Generate share code</button>
+      `}
+    </div>`;
+
+  document.body.appendChild(overlay);
+
+  overlay.querySelector('.smc-close').addEventListener('click', () => overlay.remove());
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  if (isShared) {
+    overlay.querySelector('.smc-copy').addEventListener('click', async e => {
+      await navigator.clipboard.writeText(trip.shareCode).catch(() => {});
+      const btn = e.currentTarget;
+      btn.innerHTML = '<i class="ti ti-check"></i>';
+      setTimeout(() => { btn.innerHTML = '<i class="ti ti-copy"></i>'; }, 1500);
+    });
+
+    overlay.querySelector('.smc-leave').addEventListener('click', async () => {
+      const msg = isOwner
+        ? 'Stop sharing? Others with the code will lose access.'
+        : 'Leave this shared trip? Your local copy will be removed.';
+      if (!confirm(msg)) return;
+
+      if (isOwner && currentUser) {
+        sb.from('shared_trips').delete().eq('code', trip.shareCode).catch(() => {});
+      }
+
+      const idx = state.trips.findIndex(t => t.id === trip.id);
+      if (idx !== -1) state.trips.splice(idx, 1);
+      if (!state.trips.length) { const t = defaultTrip(); state.trips.push(t); }
+      if (!state.trips.find(t => t.id === state.activeId)) {
+        state.activeId = state.trips[0].id;
+      }
+      saveState();
+      overlay.remove();
+      fullRender();
+    });
+  } else {
+    overlay.querySelector('.smc-generate').addEventListener('click', async () => {
+      const btn = overlay.querySelector('.smc-generate');
+      btn.disabled = true;
+      btn.textContent = 'Generating…';
+      const code = genShareCode();
+      trip.shareCode    = code;
+      trip.shareOwnerId = currentUser?.id || '';
+      if (currentUser) await pushSharedTrip(trip);
+      saveState();
+      overlay.remove();
+      showShareModal(trip);
+      renderTabs();
+    });
+  }
+}
+
+// ── Join modal ─────────────────────────────────────────────────────────────
+
+function showJoinModal() {
+  document.getElementById('join-modal-overlay')?.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'join-modal-overlay';
+  overlay.innerHTML = `
+    <div class="share-modal-card">
+      <div class="smc-header">
+        <h2>Join shared trip</h2>
+        <button class="smc-close icon-btn"><i class="ti ti-x"></i></button>
+      </div>
+      <p class="smc-desc">Enter the 6-character code to add a shared trip to your app.</p>
+      <input class="smc-code-input" placeholder="abc123" maxlength="8"
+             autocomplete="off" autocapitalize="none" spellcheck="false" />
+      <div class="smc-error" style="display:none"></div>
+      <button class="smc-join">Join trip</button>
+    </div>`;
+
+  document.body.appendChild(overlay);
+
+  overlay.querySelector('.smc-close').addEventListener('click', () => overlay.remove());
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  const input   = overlay.querySelector('.smc-code-input');
+  const errEl   = overlay.querySelector('.smc-error');
+  const joinBtn = overlay.querySelector('.smc-join');
+
+  input.focus();
+  input.addEventListener('input', e => { e.target.value = e.target.value.toLowerCase(); });
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') joinBtn.click(); });
+
+  joinBtn.addEventListener('click', async () => {
+    const code = input.value.trim().toLowerCase();
+    if (!code) { errEl.textContent = 'Please enter a code.'; errEl.style.display = 'block'; return; }
+
+    if (state.trips.some(t => t.shareCode === code)) {
+      errEl.textContent = 'You already have this trip.'; errEl.style.display = 'block'; return;
+    }
+
+    joinBtn.disabled = true;
+    joinBtn.textContent = 'Joining…';
+    errEl.style.display = 'none';
+
+    try {
+      const { data, error } = await sb.from('shared_trips')
+        .select('state_json, updated_at')
+        .eq('code', code)
+        .single();
+
+      if (error || !data) {
+        errEl.textContent = 'Trip not found. Check the code and try again.';
+        errEl.style.display = 'block';
+        joinBtn.disabled = false;
+        joinBtn.textContent = 'Join trip';
+        return;
+      }
+
+      const remoteTs = new Date(data.updated_at).getTime();
+      const joined   = {
+        ...data.state_json,
+        groups:   hydrate(data.state_json.groups || []),
+        shareCode: code,
+        _ts:      remoteTs
+      };
+      state.trips.push(joined);
+      state.activeId = joined.id;
+      saveState();
+      overlay.remove();
+      fullRender();
+    } catch (e) {
+      errEl.textContent = 'Something went wrong. Try again.';
+      errEl.style.display = 'block';
+      joinBtn.disabled = false;
+      joinBtn.textContent = 'Join trip';
+    }
+  });
+}
+
+// ── Auth init ──────────────────────────────────────────────────────────────
+
 async function initAuth() {
-  fullRender(); // always render local state immediately
+  fullRender();
 
   document.getElementById('syncBtn').addEventListener('click', () => {
     if (!sbReady) return;
@@ -291,7 +510,6 @@ async function initAuth() {
       }
     });
 
-
   } catch (err) {
     console.error('Supabase init error:', err);
     updateSyncBtn('offline');
@@ -307,8 +525,14 @@ function renderTabs() {
 
   state.trips.forEach(t => {
     const tab = document.createElement('div');
-    tab.className = 'tab' + (t.id === state.activeId ? ' active' : '');
+    tab.className = 'tab' + (t.id === state.activeId ? ' active' : '') + (t.shareCode ? ' shared' : '');
     tab.dataset.id = t.id;
+
+    if (t.shareCode) {
+      const si = document.createElement('i');
+      si.className = 'ti ti-share-3 tab-shared-icon';
+      tab.appendChild(si);
+    }
 
     const nameInput = document.createElement('input');
     nameInput.className = 'tab-name-input';
@@ -365,6 +589,16 @@ function renderTabs() {
     if (inputs.length) inputs[inputs.length - 1].select();
   });
   wrap.appendChild(addBtn);
+
+  const joinBtn = document.createElement('button');
+  joinBtn.className = 'join-tab-btn';
+  joinBtn.title = 'Join a shared trip by code';
+  joinBtn.innerHTML = '<i class="ti ti-link" style="font-size:13px"></i> Join';
+  joinBtn.addEventListener('click', () => {
+    if (!currentUser) { showAuthOverlay(); return; }
+    showJoinModal();
+  });
+  wrap.appendChild(joinBtn);
 }
 
 // ── Trip content ───────────────────────────────────────────────────────────
@@ -421,6 +655,10 @@ function buildBudgetCard(trip) {
       <div class="bar-inner" id="budgetBar" style="width:${pct}%;background:${barColor}"></div>
     </div>
     <div class="budget-footer">
+      <button class="share-btn${trip.shareCode ? ' active' : ''}">
+        <i class="ti ${trip.shareCode ? 'ti-share-3' : 'ti-share'}"></i>
+        ${trip.shareCode ? 'Shared' : 'Share'}
+      </button>
       <button class="pdf-btn"><i class="ti ti-download"></i> Download PDF</button>
     </div>`;
 
@@ -436,6 +674,11 @@ function buildBudgetCard(trip) {
     trip.currency = CURRENCIES[(idx + 1) % CURRENCIES.length];
     saveState();
     renderTripContent();
+  });
+
+  card.querySelector('.share-btn').addEventListener('click', () => {
+    if (!currentUser) { showAuthOverlay(); return; }
+    showShareModal(trip);
   });
 
   card.querySelector('.pdf-btn').addEventListener('click', () => downloadTripPDF(trip));
@@ -529,7 +772,6 @@ function buildGroupCard(trip, g) {
   card.className = 'group-card';
   card.id = 'gc_' + g.id;
 
-  // Header
   const hdr  = document.createElement('div');
   hdr.className = 'group-header';
 
@@ -575,7 +817,6 @@ function buildGroupCard(trip, g) {
   right.append(totalEl, delBtn, chevron);
   hdr.append(left, right);
 
-  // Color picker
   const colorRow = document.createElement('div');
   colorRow.className = 'color-row';
   COLORS.forEach(c => {
@@ -586,7 +827,6 @@ function buildGroupCard(trip, g) {
     colorRow.appendChild(dot);
   });
 
-  // Body (member list)
   const body = document.createElement('div');
   body.className = 'group-body';
   body.id = 'gbody_' + g.id;
@@ -608,7 +848,6 @@ function buildGroupCard(trip, g) {
   });
   body.appendChild(addPersonBtn);
 
-  // Wire events
   nameInput.addEventListener('input', e => { g.name = e.target.value; saveState(); });
   iconEl.addEventListener('click', e => { e.stopPropagation(); colorRow.classList.toggle('visible'); });
   delBtn.addEventListener('click', e => {

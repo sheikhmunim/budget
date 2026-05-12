@@ -5,10 +5,11 @@
 - Click "New project", give it a name (e.g. "budget-app"), pick a region close to you
 - Wait ~2 minutes for it to spin up
 
-## 2. Create the database table
+## 2. Create the database tables
 In your Supabase dashboard → SQL Editor → paste and run this:
 
 ```sql
+-- Private per-user state
 create table user_state (
   user_id uuid references auth.users(id) on delete cascade primary key,
   state_json jsonb not null default '{}',
@@ -21,6 +22,20 @@ create policy "Users manage their own state"
   on user_state for all
   using  (auth.uid() = user_id)
   with check (auth.uid() = user_id);
+
+-- Shared trips (access controlled by knowing the code)
+create table shared_trips (
+  code text primary key,
+  state_json jsonb not null default '{}',
+  updated_at timestamptz default now()
+);
+
+alter table shared_trips enable row level security;
+
+create policy "Authenticated users can read and write shared trips"
+  on shared_trips for all
+  using  (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');
 ```
 
 ## 3. Enable magic link email auth

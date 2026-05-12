@@ -267,7 +267,7 @@ body {
 .bar-outer { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
 .bar-inner { height: 8px; border-radius: 4px; background: var(--green); width: 0%; transition: width 0.4s, background 0.4s; }
 
-.budget-footer { display: flex; justify-content: flex-end; margin-top: 10px; }
+.budget-footer { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 10px; }
 .pdf-btn {
   display: flex;
   align-items: center;
@@ -596,6 +596,157 @@ body {
   #print-frame .pf-ei-name { flex: 1; font-size: 11px; color: #555; }
   #print-frame .pf-ei-price { font-size: 11px; font-weight: 500; }
   #print-frame .pf-empty { padding: 7px 12px; font-size: 11px; color: #bbb; }
+}
+
+/* ── Share button (budget footer) ── */
+.share-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-family: var(--font);
+  color: var(--text-secondary);
+  background: none;
+  border: 0.5px solid var(--border-md);
+  border-radius: 10px;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.share-btn:hover { background: var(--text); color: var(--bg); }
+.share-btn.active { color: var(--green); border-color: rgba(29,158,117,0.45); }
+.share-btn.active:hover { background: var(--green); color: #fff; border-color: var(--green); }
+
+/* ── Shared trip tab indicator ── */
+.tab-shared-icon { font-size: 10px; opacity: 0.55; flex-shrink: 0; }
+.tab.shared { border-color: rgba(29,158,117,0.4); }
+.tab.shared.active { border-color: var(--text); }
+
+/* ── Join tab button ── */
+.join-tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  border: 0.5px solid var(--border-md);
+  background: none;
+  cursor: pointer;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  font-family: var(--font);
+}
+.join-tab-btn:hover { background: var(--bg); color: var(--text); }
+
+/* ── Share / Join modals ── */
+#share-modal-overlay,
+#join-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1.5rem;
+}
+
+.share-modal-card {
+  background: var(--bg);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  width: 100%;
+  max-width: 340px;
+}
+
+.smc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+.smc-header h2 { font-size: 17px; font-weight: 600; }
+
+.smc-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 1.25rem;
+  line-height: 1.5;
+}
+
+.smc-code-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: var(--bg-secondary);
+  border: 0.5px solid var(--border-md);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  margin-bottom: 1.25rem;
+}
+.smc-code {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  font-family: 'Courier New', monospace;
+  color: var(--text);
+}
+
+.smc-generate,
+.smc-join {
+  display: block;
+  width: 100%;
+  padding: 11px;
+  background: var(--text);
+  color: var(--bg);
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-family: var(--font);
+  font-weight: 500;
+  cursor: pointer;
+}
+.smc-generate:disabled,
+.smc-join:disabled { opacity: 0.55; cursor: default; }
+
+.smc-leave {
+  display: block;
+  width: 100%;
+  padding: 9px;
+  background: none;
+  color: var(--red);
+  border: 0.5px solid var(--border-md);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-family: var(--font);
+  cursor: pointer;
+  margin-top: 8px;
+}
+.smc-leave:hover { background: var(--bg-danger); }
+
+.smc-code-input {
+  display: block;
+  width: 100%;
+  padding: 12px 14px;
+  border: 0.5px solid var(--border-md);
+  border-radius: var(--radius-md);
+  font-size: 22px;
+  font-family: 'Courier New', monospace;
+  background: var(--bg-secondary);
+  color: var(--text);
+  text-align: center;
+  letter-spacing: 0.12em;
+  margin-bottom: 10px;
+}
+.smc-code-input:focus { outline: none; border-color: var(--text); }
+
+.smc-error {
+  font-size: 12px;
+  color: var(--red);
+  margin-bottom: 10px;
 }
 
 /* ── Auth overlay ── */
