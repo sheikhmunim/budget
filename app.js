@@ -488,11 +488,14 @@ async function initAuth() {
     updateSyncBtn('syncing');
     clearTimeout(_syncTimer);
     _syncTimer = null;
-    const updated = await loadFromCloud();
-    if (updated) fullRender();
-    else await doSync();
-    updateSyncBtn('synced');
-    btn.disabled = false;
+    try {
+      const updated = await loadFromCloud();
+      if (updated) fullRender();
+      else await doSync();
+    } finally {
+      updateSyncBtn('synced');
+      btn.disabled = false;
+    }
   });
 
   if (!sbReady || !sb) { showAuthOverlay(); return; }
