@@ -266,6 +266,7 @@ function buildBudgetCard(trip) {
       <button class="pdf-btn"><i class="ti ti-download"></i> Download PDF</button>
     </div>`;
 
+  card.querySelector('.budget-input').addEventListener('focus', e => e.target.select());
   card.querySelector('.budget-input').addEventListener('input', e => {
     trip.budget = parseFloat(e.target.value) || 0;
     updateBudgetDisplay(trip);
@@ -518,6 +519,7 @@ function buildExpenseRow(trip, m, e) {
     </div>`;
 
   row.querySelector('.expense-item-input').addEventListener('input', ev => { e.item = ev.target.value; saveState(); });
+  row.querySelector('.expense-price-input').addEventListener('focus', ev => ev.target.select());
   row.querySelector('.expense-price-input').addEventListener('input', ev => {
     e.price = parseFloat(ev.target.value) || 0;
     const ptotEl = document.getElementById('ptotal_' + m.id);
