@@ -44,8 +44,60 @@ body {
 
 /* ── App header ── */
 .app-header { margin-bottom: 1.25rem; }
+.header-row { display: flex; align-items: flex-start; justify-content: space-between; }
 .app-header h1 { font-size: 22px; font-weight: 500; }
 .app-header .subtitle { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+
+.sync-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 5px;
+  font-size: 20px;
+  color: var(--text-secondary);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+  opacity: 0.55;
+  transition: opacity 0.15s, color 0.15s;
+}
+.sync-btn:hover { opacity: 1; background: var(--bg-secondary); }
+.sync-btn[data-state="synced"]  { color: var(--green); opacity: 0.8; }
+.sync-btn[data-state="syncing"] { color: var(--amber); opacity: 1; }
+.sync-btn[data-state="offline"] { color: var(--text-secondary); }
+
+#sync-popover {
+  position: fixed;
+  background: var(--bg);
+  border: 0.5px solid var(--border-md);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.14);
+  padding: 10px 12px;
+  z-index: 900;
+  min-width: 190px;
+}
+.sp-email {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 0.5px solid var(--border);
+  word-break: break-all;
+}
+.sp-signout {
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  font-size: 13px;
+  font-family: var(--font);
+  color: var(--red);
+  cursor: pointer;
+  padding: 2px 0;
+}
+.sp-signout:hover { text-decoration: underline; }
 
 /* ── Trip tabs ── */
 .tabs-wrap {
@@ -510,3 +562,87 @@ body {
   #print-frame .pf-ei-price { font-size: 11px; font-weight: 500; }
   #print-frame .pf-empty { padding: 7px 12px; font-size: 11px; color: #bbb; }
 }
+
+/* ── Auth overlay ── */
+#auth-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1.5rem;
+}
+
+.auth-card {
+  background: var(--bg);
+  border-radius: var(--radius-lg);
+  padding: 2rem 1.5rem 1.75rem;
+  width: 100%;
+  max-width: 340px;
+  text-align: center;
+}
+
+.auth-top-icon {
+  font-size: 38px;
+  color: var(--green);
+  margin-bottom: 0.85rem;
+  line-height: 1;
+}
+
+.auth-card h2 { font-size: 17px; font-weight: 600; margin-bottom: 0.4rem; }
+.auth-card > p {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 1.4rem;
+  line-height: 1.55;
+}
+
+#auth-email {
+  display: block;
+  width: 100%;
+  padding: 10px 14px;
+  border: 0.5px solid var(--border-md);
+  border-radius: var(--radius-md);
+  font-size: 15px;
+  font-family: var(--font);
+  background: var(--bg-secondary);
+  color: var(--text);
+  margin-bottom: 10px;
+  text-align: center;
+}
+#auth-email:focus { outline: none; border-color: var(--text); }
+
+#auth-send-btn {
+  display: block;
+  width: 100%;
+  padding: 11px;
+  background: var(--text);
+  color: var(--bg);
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-family: var(--font);
+  font-weight: 500;
+  cursor: pointer;
+  margin-bottom: 12px;
+  transition: opacity 0.15s;
+}
+#auth-send-btn:disabled { opacity: 0.55; cursor: default; }
+
+.auth-skip {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-family: var(--font);
+  cursor: pointer;
+  padding: 4px 8px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.auth-skip:hover { color: var(--text); }
+
+.auth-sent-icon { font-size: 34px; color: var(--green); margin-bottom: 0.75rem; line-height: 1; }
+.auth-sent-msg  { font-size: 13px; color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.55; }

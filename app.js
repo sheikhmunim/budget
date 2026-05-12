@@ -2,6 +2,11 @@ const COLORS      = ["#7F77DD","#1D9E75","#D4537E","#EF9F27","#378ADD","#D85A30"
 const ICONS       = ["ti-users","ti-home","ti-heart","ti-star","ti-confetti","ti-users-group","ti-mood-smile","ti-briefcase"];
 const CURRENCIES  = ['AUD', 'USD', 'BDT'];
 
+// ── Supabase config ────────────────────────────────────────────────────────
+// Replace these two values with your project's URL and anon key
+const SUPABASE_URL = 'https://cqivnqntpuhnraohrwfo.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_NFzOgMAak3jbGlvRviWuqQ_6EASCDz3';
+
 // ── Utilities ──────────────────────────────────────────────────────────────
 
 function uid()  { return Math.random().toString(36).slice(2, 9); }
@@ -129,19 +134,205 @@ function loadState() {
     const raw = localStorage.getItem('giftplanner_v2');
     if (raw) {
       const p = JSON.parse(raw);
-      return { activeId: p.activeId, trips: p.trips.map(t => ({ ...t, groups: hydrate(t.groups || []) })) };
+      return { activeId: p.activeId, trips: p.trips.map(t => ({ ...t, groups: hydrate(t.groups || []) })), _ts: p._ts || 0 };
     }
   } catch (e) {}
   const t = defaultTrip();
-  return { activeId: t.id, trips: [t] };
+  return { activeId: t.id, trips: [t], _ts: 0 };
 }
 
 function saveState() {
+  state._ts = Date.now();
   try { localStorage.setItem('giftplanner_v2', JSON.stringify(state)); } catch (e) {}
+  schedulSync();
 }
 
 let state = loadState();
 function activeTrip() { return state.trips.find(t => t.id === state.activeId) || state.trips[0]; }
+
+// ── Supabase auth & sync ───────────────────────────────────────────────────
+
+const sbReady = SUPABASE_URL !== 'YOUR_SUPABASE_URL';
+const sb      = sbReady ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
+let   currentUser = null;
+
+// Debounced sync — fires 1.5 s after last change so rapid typing doesn't spam Supabase
+let _syncTimer = null;
+function schedulSync() {
+  if (!sbReady || !currentUser) return;
+  clearTimeout(_syncTimer);
+  _syncTimer = setTimeout(doSync, 1500);
+}
+
+async function doSync() {
+  if (!currentUser) return;
+  updateSyncBtn('syncing');
+  try {
+    await sb.from('user_state').upsert(
+      { user_id: currentUser.id, state_json: state, updated_at: new Date().toISOString() },
+      { onConflict: 'user_id' }
+    );
+    updateSyncBtn('synced');
+  } catch (_) { updateSyncBtn('synced'); }
+}
+
+async function loadFromCloud() {
+  try {
+    const { data } = await sb.from('user_state')
+      .select('state_json, updated_at')
+      .eq('user_id', currentUser.id)
+      .single();
+
+    if (!data) { doSync(); return; } // first sign-in — push local data up
+
+    const remoteTs = new Date(data.updated_at).getTime();
+    if (remoteTs > (state._ts || 0)) {
+      // Cloud is newer — use it
+      const p = data.state_json;
+      state = { activeId: p.activeId, trips: p.trips.map(t => ({ ...t, groups: hydrate(t.groups || []) })), _ts: remoteTs };
+      try { localStorage.setItem('giftplanner_v2', JSON.stringify(state)); } catch (_) {}
+    } else {
+      doSync(); // local is newer — push up
+    }
+  } catch (_) {}
+}
+
+function updateSyncBtn(s) {
+  const btn = document.getElementById('syncBtn');
+  if (!btn) return;
+  const icon = { synced: 'ti-cloud-check', syncing: 'ti-cloud-upload', offline: 'ti-cloud-off' }[s] || 'ti-cloud-off';
+  btn.dataset.state = s;
+  btn.innerHTML = `<i class="ti ${icon}"></i>`;
+}
+
+function showSyncPopover() {
+  const old = document.getElementById('sync-popover');
+  if (old) { old.remove(); return; }
+
+  const btn     = document.getElementById('syncBtn');
+  const popover = document.createElement('div');
+  popover.id    = 'sync-popover';
+  popover.innerHTML = `
+    <div class="sp-email">${esc(currentUser.email)}</div>
+    <button class="sp-signout">Sign out</button>`;
+  document.body.appendChild(popover);
+
+  const rect = btn.getBoundingClientRect();
+  popover.style.top   = (rect.bottom + 8) + 'px';
+  popover.style.right = (window.innerWidth - rect.right) + 'px';
+
+  popover.querySelector('.sp-signout').addEventListener('click', async () => {
+    popover.remove();
+    await sb.auth.signOut();
+  });
+
+  setTimeout(() => {
+    document.addEventListener('click', function close(e) {
+      if (!popover.contains(e.target) && e.target !== btn) {
+        popover.remove();
+        document.removeEventListener('click', close);
+      }
+    });
+  }, 0);
+}
+
+function showAuthOverlay() {
+  if (document.getElementById('auth-overlay')) return;
+  const overlay = document.createElement('div');
+  overlay.id = 'auth-overlay';
+  overlay.innerHTML = `
+    <div class="auth-card">
+      <div class="auth-top-icon"><i class="ti ti-cloud"></i></div>
+      <h2>Sync across devices</h2>
+      <p>Enter your email and we'll send you a magic link — no password needed.</p>
+      <div id="auth-form">
+        <input id="auth-email" type="email" placeholder="your@email.com" autocomplete="email" inputmode="email" />
+        <button id="auth-send-btn">Send magic link</button>
+        <button class="auth-skip" id="auth-skip-btn">Not now</button>
+      </div>
+      <div id="auth-sent" style="display:none">
+        <div class="auth-sent-icon"><i class="ti ti-mail-check"></i></div>
+        <p class="auth-sent-msg">Check your email — tap the link to sign in on this device.</p>
+        <button class="auth-skip" id="auth-change-btn">Use a different email</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const emailEl   = overlay.querySelector('#auth-email');
+  const sendBtn   = overlay.querySelector('#auth-send-btn');
+  const formEl    = overlay.querySelector('#auth-form');
+  const sentEl    = overlay.querySelector('#auth-sent');
+
+  emailEl.addEventListener('keydown', e => { if (e.key === 'Enter') sendBtn.click(); });
+
+  sendBtn.addEventListener('click', async () => {
+    const email = emailEl.value.trim();
+    if (!email) { emailEl.focus(); return; }
+    sendBtn.disabled    = true;
+    sendBtn.textContent = 'Sending…';
+    const { error } = await sb.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: 'https://sheikhmunim.github.io/budget/' }
+    });
+    if (error) {
+      sendBtn.disabled    = false;
+      sendBtn.textContent = 'Send magic link';
+      alert('Could not send link: ' + error.message);
+    } else {
+      formEl.style.display = 'none';
+      sentEl.style.display = 'block';
+    }
+  });
+
+  overlay.querySelector('#auth-skip-btn').addEventListener('click', () => {
+    sessionStorage.setItem('auth_skipped', '1');
+    overlay.remove();
+  });
+
+  overlay.querySelector('#auth-change-btn').addEventListener('click', () => {
+    formEl.style.display = 'block';
+    sentEl.style.display = 'none';
+    emailEl.value = '';
+    emailEl.focus();
+  });
+}
+
+async function initAuth() {
+  if (!sbReady) { fullRender(); return; } // Supabase not configured yet
+
+  fullRender(); // show local state immediately while we check auth
+
+  const { data: { session } } = await sb.auth.getSession();
+
+  if (session) {
+    currentUser = session.user;
+    await loadFromCloud();
+    updateSyncBtn('synced');
+    fullRender(); // re-render with cloud data if it was newer
+  } else {
+    updateSyncBtn('offline');
+    if (!sessionStorage.getItem('auth_skipped')) showAuthOverlay();
+  }
+
+  // Handle magic link redirect and future sign-in/out events
+  sb.auth.onAuthStateChange(async (event, session) => {
+    if (event === 'SIGNED_IN' && session) {
+      currentUser = session.user;
+      document.getElementById('auth-overlay')?.remove();
+      await loadFromCloud();
+      updateSyncBtn('synced');
+      fullRender();
+    } else if (event === 'SIGNED_OUT') {
+      currentUser = null;
+      updateSyncBtn('offline');
+    }
+  });
+
+  document.getElementById('syncBtn').addEventListener('click', () => {
+    if (currentUser) showSyncPopover();
+    else { sessionStorage.removeItem('auth_skipped'); showAuthOverlay(); }
+  });
+}
 
 // ── Tabs ───────────────────────────────────────────────────────────────────
 
@@ -553,4 +744,4 @@ function buildPersonRow(trip, g, m) {
 // ── Init ───────────────────────────────────────────────────────────────────
 
 function fullRender() { renderTabs(); renderTripContent(); }
-fullRender();
+initAuth();
