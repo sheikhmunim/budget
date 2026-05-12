@@ -192,18 +192,17 @@ async function loadFromCloud() {
       .eq('user_id', currentUser.id)
       .single();
 
-    if (!data) { doSync(); return; } // first sign-in — push local data up
+    if (!data) { doSync(); return false; } // first sign-in — push local data up
 
     const remoteTs = new Date(data.updated_at).getTime();
     if (remoteTs > (state._ts || 0)) {
-      // Cloud is newer — use it
       const p = data.state_json;
       state = { activeId: p.activeId, trips: p.trips.map(t => ({ ...t, groups: hydrate(t.groups || []) })), _ts: remoteTs };
       try { localStorage.setItem('giftplanner_v2', JSON.stringify(state)); } catch (_) {}
-    } else {
-      doSync(); // local is newer — push up
+      return true; // state was updated from cloud
     }
-  } catch (_) {}
+    return false; // nothing changed
+  } catch (_) { return false; }
 }
 
 function updateSyncBtn(s) {
@@ -318,7 +317,8 @@ async function initAuth() {
 
     if (session) {
       currentUser = session.user;
-      await loadFromCloud();
+      const updated = await loadFromCloud();
+      if (!updated) doSync(); // push local data up if cloud isn't newer
       updateSyncBtn('synced');
       fullRender();
     } else {
@@ -330,7 +330,8 @@ async function initAuth() {
       if (event === 'SIGNED_IN' && session) {
         currentUser = session.user;
         document.getElementById('auth-overlay')?.remove();
-        await loadFromCloud();
+        const updated = await loadFromCloud();
+        if (!updated) doSync();
         updateSyncBtn('synced');
         fullRender();
       } else if (event === 'SIGNED_OUT') {
@@ -339,11 +340,11 @@ async function initAuth() {
       }
     });
 
-    // Poll every 3 seconds when app is visible
+    // Poll every 3 seconds — only re-render if cloud had newer data
     setInterval(async () => {
       if (document.visibilityState === 'visible' && currentUser) {
-        await loadFromCloud();
-        fullRender();
+        const updated = await loadFromCloud();
+        if (updated) fullRender();
       }
     }, 3000);
 
