@@ -153,8 +153,12 @@ function activeTrip() { return state.trips.find(t => t.id === state.activeId) ||
 // ── Supabase auth & sync ───────────────────────────────────────────────────
 
 const sbReady = SUPABASE_URL !== 'YOUR_SUPABASE_URL';
-const sb      = sbReady ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
-let   currentUser = null;
+let sb = null;
+let currentUser = null;
+if (sbReady) {
+  try { sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY); }
+  catch (e) { console.error('Supabase client failed to init:', e); }
+}
 
 // Debounced sync — fires 1.5 s after last change so rapid typing doesn't spam Supabase
 let _syncTimer = null;
@@ -285,7 +289,6 @@ function showAuthOverlay() {
   });
 
   overlay.querySelector('#auth-skip-btn').addEventListener('click', () => {
-    sessionStorage.setItem('auth_skipped', '1');
     overlay.remove();
   });
 
@@ -307,7 +310,7 @@ async function initAuth() {
     else { sessionStorage.removeItem('auth_skipped'); showAuthOverlay(); }
   });
 
-  if (!sbReady) return;
+  if (!sbReady || !sb) { showAuthOverlay(); return; }
 
   try {
     const { data: { session } } = await sb.auth.getSession();
@@ -319,7 +322,7 @@ async function initAuth() {
       fullRender();
     } else {
       updateSyncBtn('offline');
-      if (!sessionStorage.getItem('auth_skipped')) showAuthOverlay();
+      showAuthOverlay();
     }
 
     sb.auth.onAuthStateChange(async (event, session) => {
@@ -338,7 +341,7 @@ async function initAuth() {
   } catch (err) {
     console.error('Supabase init error:', err);
     updateSyncBtn('offline');
-    if (!sessionStorage.getItem('auth_skipped')) showAuthOverlay();
+    showAuthOverlay();
   }
 }
 
