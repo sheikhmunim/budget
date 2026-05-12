@@ -285,8 +285,14 @@ function showAuthOverlay() {
     const pass  = passEl.value;
     if (!email || !pass) { showErr('Please enter your email and password.'); return; }
     setLoading(signIn, true, 'Sign in');
-    const { error } = await sb.auth.signInWithPassword({ email, password: pass });
-    if (error) { showErr(error.message); setLoading(signIn, false, 'Sign in'); }
+    try {
+      const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+      if (error) showErr(error.message);
+    } catch (e) {
+      showErr('Sign in failed. Please try again.');
+    } finally {
+      setLoading(signIn, false, 'Sign in');
+    }
   });
 
   signUp.addEventListener('click', async () => {
@@ -296,8 +302,14 @@ function showAuthOverlay() {
     if (!email || !pass) { showErr('Please enter your email and password.'); return; }
     if (pass.length < 6)  { showErr('Password must be at least 6 characters.'); return; }
     setLoading(signUp, true, 'Create account');
-    const { error } = await sb.auth.signUp({ email, password: pass });
-    if (error) { showErr(error.message); setLoading(signUp, false, 'Create account'); }
+    try {
+      const { error } = await sb.auth.signUp({ email, password: pass });
+      if (error) showErr(error.message);
+    } catch (e) {
+      showErr('Sign up failed. Please try again.');
+    } finally {
+      setLoading(signUp, false, 'Create account');
+    }
   });
 
   overlay.querySelector('#auth-skip-btn').addEventListener('click', () => overlay.remove());
