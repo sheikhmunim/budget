@@ -64,69 +64,7 @@ function newTrip(name) {
 }
 
 function defaultTrip() {
-  const t = newTrip('Bangladesh 2026');
-  t.budget = 400;
-  t.groups = hydrate([
-    { name: "Parents & in-laws", icon: "ti-home", color: "#5DCAA5", open: true, members: [
-      { name: "Ammu",  hint: "Saree / gold-plated jewellery", amt: 0 },
-      { name: "Abbu",  hint: "Punjabi / wallet",              amt: 0 },
-      { name: "Aunty", hint: "Saree / cosmetics",             amt: 0 },
-      { name: "Uncle", hint: "Punjabi / attar perfume",       amt: 0 },
-    ]},
-    { name: "Brothers", icon: "ti-users", color: "#7F77DD", open: false, members: [
-      { name: "Purbo",        hint: "Car LEGO set",         amt: 0 },
-      { name: "Dulabhai",     hint: "Attar / keychain",     amt: 0 },
-      { name: "Shohag Bhai",  hint: "Attar / wallet",       amt: 0 },
-      { name: "Showmik",      hint: "Chocolates / keychain", amt: 0 },
-      { name: "Sian",         hint: "Chocolates",           amt: 0 },
-      { name: "Sakib",        hint: "Chocolates",           amt: 0 },
-      { name: "Akik",         hint: "Chocolates",           amt: 0 },
-      { name: "Kafsat",       hint: "Chocolates",           amt: 0 },
-      { name: "Shuvo Bhai (1)", hint: "Attar / keychain",   amt: 0 },
-      { name: "Shuvo Bhai (2)", hint: "Attar / keychain",   amt: 0 },
-      { name: "Mahfuj",       hint: "Chocolates",           amt: 0 },
-      { name: "Mon",          hint: "Chocolates",           amt: 0 },
-      { name: "Nafiz",        hint: "Chocolates",           amt: 0 },
-    ]},
-    { name: "Sisters", icon: "ti-heart", color: "#D4537E", open: false, members: [
-      { name: "Diya",         hint: "Lipstick / skincare", amt: 0 },
-      { name: "Shuchona",     hint: "Lipstick / skincare", amt: 0 },
-      { name: "Duti Apu",     hint: "Lipstick / perfume",  amt: 0 },
-      { name: "Sraborni Apu", hint: "Lipstick / perfume",  amt: 0 },
-      { name: "Shikto",       hint: "Lipstick / skincare", amt: 0 },
-      { name: "Dristy",       hint: "Lipstick / skincare", amt: 0 },
-      { name: "Mou Apu",      hint: "Lipstick / perfume",  amt: 0 },
-      { name: "Tithi",        hint: "Lipstick / skincare", amt: 0 },
-      { name: "Maisha",       hint: "Lipstick / skincare", amt: 0 },
-      { name: "Mitu",         hint: "Lipstick / skincare", amt: 0 },
-      { name: "Shotota",      hint: "Lipstick / skincare", amt: 0 },
-      { name: "Ekota",        hint: "Lipstick / skincare", amt: 0 },
-      { name: "Vabi",         hint: "Lipstick / perfume",  amt: 0 },
-    ]},
-    { name: "Nephews", icon: "ti-star", color: "#EF9F27", open: false, members: [
-      { name: "Shumormo", hint: "Toy / Lego mini / chocolate", amt: 0 },
-      { name: "Kaif",     hint: "Toy / chocolate",             amt: 0 },
-      { name: "Yusha",    hint: "Toy / chocolate",             amt: 0 },
-      { name: "Ajlan",    hint: "Toy / chocolate",             amt: 0 },
-    ]},
-    { name: "Friends", icon: "ti-confetti", color: "#378ADD", open: false, members: [
-      { name: "Joy",       hint: "Chocolates / keychain", amt: 0 },
-      { name: "Istiack",   hint: "Chocolates / keychain", amt: 0 },
-      { name: "Keya",      hint: "Lipstick + perfume",    amt: 0 },
-      { name: "Sanjana",   hint: "Lipstick",              amt: 0 },
-      { name: "Rafi",      hint: "Chocolates",            amt: 0 },
-      { name: "Sajib",     hint: "Chocolates",            amt: 0 },
-      { name: "Taj",       hint: "Chocolates",            amt: 0 },
-      { name: "Al-Amin",   hint: "Chocolates",            amt: 0 },
-      { name: "Al-Mahmud", hint: "Chocolates",            amt: 0 },
-      { name: "Raju",      hint: "Chocolates",            amt: 0 },
-    ]},
-    { name: "Uncles & aunts", icon: "ti-users-group", color: "#888780", open: false, members: [
-      { name: "Khalamoni", hint: "Saree / cosmetics", amt: 0 },
-      { name: "Putul Kaki", hint: "Saree / cosmetics", amt: 0 },
-    ]},
-  ]);
-  return t;
+  return newTrip('My trip');
 }
 
 function loadState() {
