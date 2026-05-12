@@ -172,12 +172,17 @@ async function doSync() {
   if (!currentUser) return;
   updateSyncBtn('syncing');
   try {
-    await sb.from('user_state').upsert(
+    const upsertPromise = sb.from('user_state').upsert(
       { user_id: currentUser.id, state_json: state, updated_at: new Date().toISOString() },
       { onConflict: 'user_id' }
     );
-    updateSyncBtn('synced');
-  } catch (_) { updateSyncBtn('synced'); }
+    const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000));
+    const { error } = await Promise.race([upsertPromise, timeout]);
+    if (error) console.error('Sync error:', error.message, error);
+  } catch (e) {
+    console.error('Sync failed:', e.message);
+  }
+  updateSyncBtn('synced');
 }
 
 async function loadFromCloud() {
