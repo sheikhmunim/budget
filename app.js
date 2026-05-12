@@ -116,13 +116,20 @@ async function doSync() {
   if (!currentUser) return;
   updateSyncBtn('syncing');
   try {
+    const ts = new Date().toISOString();
     const upsertPromise = sb.from('user_state').upsert(
-      { user_id: currentUser.id, state_json: state, updated_at: new Date().toISOString() },
+      { user_id: currentUser.id, state_json: state, updated_at: ts },
       { onConflict: 'user_id' }
     );
     const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000));
     const { error } = await Promise.race([upsertPromise, timeout]);
-    if (error) console.error('Sync error:', error.message, error);
+    if (!error) {
+      // Align local _ts with push time so the next load sees "in-sync" and skips a redundant push
+      state._ts = new Date(ts).getTime();
+      try { localStorage.setItem('giftplanner_v2', JSON.stringify(state)); } catch (_) {}
+    } else {
+      console.error('Sync error:', error.message, error);
+    }
 
     // Push all shared trips
     await Promise.all(state.trips.filter(t => t.shareCode).map(pushSharedTrip));
@@ -154,9 +161,9 @@ async function pullSharedTrip(trip) {
       .eq('code', trip.shareCode)
       .single();
     if (!data) return null;
-    const cloudTs = data.state_json._ts || 0;
-    if (cloudTs > (trip._ts || 0)) {
-      return { ...data.state_json, shareCode: trip.shareCode };
+    const remoteTs = new Date(data.updated_at).getTime();
+    if (remoteTs > (trip._ts || 0)) {
+      return { ...data.state_json, shareCode: trip.shareCode, _ts: remoteTs };
     }
     return null;
   } catch (_) { return null; }
@@ -174,13 +181,10 @@ async function loadFromCloud() {
 
     if (!data) { doSync(); return false; }
 
-    // Compare embedded edit-time (_ts inside state_json), not updated_at (push time).
-    // updated_at is ~1.5 s after _ts due to debounce, which causes other devices to
-    // falsely see a "newer" version after pushing their own stale state.
-    const cloudTs = data.state_json._ts || 0;
-    if (cloudTs > (state._ts || 0)) {
+    const remoteTs = new Date(data.updated_at).getTime();
+    if (remoteTs > (state._ts || 0)) {
       const p = data.state_json;
-      state = { activeId: p.activeId, trips: p.trips.map(t => ({ ...t, groups: hydrate(t.groups || []) })), _ts: p._ts || 0 };
+      state = { activeId: p.activeId, trips: p.trips.map(t => ({ ...t, groups: hydrate(t.groups || []) })), _ts: remoteTs };
       try { localStorage.setItem('giftplanner_v2', JSON.stringify(state)); } catch (_) {}
       anyUpdate = true;
     }
@@ -484,9 +488,9 @@ async function initAuth() {
     updateSyncBtn('syncing');
     clearTimeout(_syncTimer);
     _syncTimer = null;
-    await doSync();
     const updated = await loadFromCloud();
     if (updated) fullRender();
+    else await doSync();
     updateSyncBtn('synced');
     btn.disabled = false;
   });
