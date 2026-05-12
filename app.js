@@ -285,7 +285,7 @@ function buildBudgetCard(trip) {
   return card;
 }
 
-function generatePrintHTML(trip) {
+function generatePrintContent(trip) {
   const sym = currencySymbol(trip);
   const { spent, rem, pct, barColor } = getBudgetStatus(trip);
   const fmtA = n => sym + (parseFloat(n) || 0).toFixed(0);
@@ -294,84 +294,54 @@ function generatePrintHTML(trip) {
   const groupsHTML = trip.groups.map(g => {
     const membersHTML = g.members.map(m => {
       const expHTML = (m.expenses || []).map(e => `
-        <div class="ei">
-          <span class="ei-name">${esc(e.item) || '<span style="opacity:.35">item</span>'}</span>
-          <span class="ei-price">${fmtA(e.price)}</span>
+        <div class="pf-ei">
+          <span class="pf-ei-name">${esc(e.item) || '—'}</span>
+          <span class="pf-ei-price">${fmtA(e.price)}</span>
         </div>`).join('');
       return `
-        <div class="member">
-          <div class="mrow">
-            <span class="mname">${esc(m.name) || '—'}</span>
-            <span class="mhint">${esc(m.hint)}</span>
-            <span class="mamt">${fmtA(personTotal(m))}</span>
+        <div class="pf-member">
+          <div class="pf-mrow">
+            <span class="pf-mname">${esc(m.name) || '—'}</span>
+            <span class="pf-mhint">${esc(m.hint)}</span>
+            <span class="pf-mamt">${fmtA(personTotal(m))}</span>
           </div>${expHTML}
         </div>`;
     }).join('');
     return `
-      <div class="group">
-        <div class="ghdr">
-          <span class="gdot" style="background:${g.color}"></span>
-          <span class="gname">${esc(g.name)}</span>
-          <span class="gtotal">${fmtA(groupTotal(g))}</span>
+      <div class="pf-group">
+        <div class="pf-ghdr">
+          <span class="pf-gdot" style="background:${g.color}"></span>
+          <span class="pf-gname">${esc(g.name)}</span>
+          <span class="pf-gtotal">${fmtA(groupTotal(g))}</span>
         </div>
-        <div class="gmembers">${membersHTML || '<div class="empty">No members</div>'}</div>
+        <div>${membersHTML || '<div class="pf-empty">No members</div>'}</div>
       </div>`;
   }).join('');
 
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>${esc(trip.name)}</title>
-<style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #1a1a1a; padding: 24px 28px; font-size: 13px; }
-  h1 { font-size: 18px; font-weight: 600; margin-bottom: 3px; }
-  .sub { font-size: 11px; color: #999; margin-bottom: 16px; }
-  .summary { display: flex; gap: 24px; margin-bottom: 8px; }
-  .slabel { font-size: 10px; color: #999; text-transform: uppercase; letter-spacing: .04em; }
-  .sval { font-size: 15px; font-weight: 600; margin-top: 2px; }
-  .sval.ok { color: #1D9E75; } .sval.warn { color: #BA7517; } .sval.danger { color: #E24B4A; }
-  .bar { height: 5px; background: #e8e8e8; border-radius: 3px; margin-bottom: 20px; overflow: hidden; }
-  .bar-fill { height: 5px; border-radius: 3px; }
-  .group { margin-bottom: 12px; border: 0.5px solid #e0e0e0; border-radius: 8px; overflow: hidden; page-break-inside: avoid; }
-  .ghdr { display: flex; align-items: center; gap: 8px; padding: 7px 12px; background: #f7f7f5; border-bottom: 0.5px solid #e0e0e0; }
-  .gdot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
-  .gname { font-size: 13px; font-weight: 600; flex: 1; }
-  .gtotal { font-size: 13px; font-weight: 600; }
-  .member { border-bottom: 0.5px solid #f0f0f0; }
-  .member:last-child { border-bottom: none; }
-  .mrow { display: flex; align-items: center; gap: 10px; padding: 5px 12px; }
-  .mname { font-size: 12px; font-weight: 500; min-width: 90px; }
-  .mhint { flex: 1; font-size: 11px; color: #888; }
-  .mamt { font-size: 12px; font-weight: 500; white-space: nowrap; }
-  .ei { display: flex; align-items: center; gap: 10px; padding: 3px 12px 3px 28px; background: #fafaf9; border-top: 0.5px solid #f0f0f0; }
-  .ei-name { flex: 1; font-size: 11px; color: #555; }
-  .ei-price { font-size: 11px; font-weight: 500; }
-  .empty { padding: 7px 12px; font-size: 11px; color: #bbb; }
-  @media print { body { padding: 0; } @page { margin: 16mm 14mm; size: A4 portrait; } }
-</style>
-</head>
-<body>
-  <h1>${esc(trip.name)}</h1>
-  <div class="sub">Budget plan &middot; ${new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
-  <div class="summary">
-    <div><div class="slabel">Budget</div><div class="sval">${fmtA(trip.budget)}</div></div>
-    <div><div class="slabel">Spent</div><div class="sval">${fmtA(spent)}</div></div>
-    <div><div class="slabel">Remaining</div><div class="sval ${remClass}">${fmtA(rem)}</div></div>
-  </div>
-  <div class="bar"><div class="bar-fill" style="width:${pct}%;background:${barColor}"></div></div>
-  ${groupsHTML}
-  <script>window.addEventListener('load', () => window.print());<\/script>
-</body>
-</html>`;
+  return `
+    <h1>${esc(trip.name)}</h1>
+    <div class="pf-sub">Budget plan &middot; ${new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+    <div class="pf-summary">
+      <div><div class="pf-slabel">Budget</div><div class="pf-sval">${fmtA(trip.budget)}</div></div>
+      <div><div class="pf-slabel">Spent</div><div class="pf-sval">${fmtA(spent)}</div></div>
+      <div><div class="pf-slabel">Remaining</div><div class="pf-sval ${remClass}">${fmtA(rem)}</div></div>
+    </div>
+    <div class="pf-bar"><div class="pf-bar-fill" style="width:${pct}%;background:${barColor}"></div></div>
+    ${groupsHTML}`;
 }
 
 function downloadTripPDF(trip) {
-  const w = window.open('', '_blank');
-  if (!w) { alert('Allow pop-ups to download PDF.'); return; }
-  w.document.write(generatePrintHTML(trip));
-  w.document.close();
+  const old = document.getElementById('print-frame');
+  if (old) old.remove();
+
+  const frame = document.createElement('div');
+  frame.id = 'print-frame';
+  frame.innerHTML = generatePrintContent(trip);
+  document.body.appendChild(frame);
+
+  const cleanup = () => { frame.remove(); window.removeEventListener('afterprint', cleanup); };
+  window.addEventListener('afterprint', cleanup);
+  window.print();
 }
 
 function updateBudgetDisplay(trip) {

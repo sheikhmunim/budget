@@ -463,3 +463,50 @@ body {
   .expense-row { padding: 6px 1rem 6px 1.5rem; gap: 8px; }
   .expense-price-input { width: 60px; }
 }
+
+/* ── Print / PDF ── */
+#print-frame { display: none; }
+
+@page { margin: 16mm 14mm; size: A4 portrait; }
+
+@media print {
+  body > .app-wrap { display: none !important; }
+
+  #print-frame {
+    display: block !important;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 13px;
+    color: #1a1a1a;
+  }
+
+  #print-frame h1 { font-size: 18px; font-weight: 600; margin-bottom: 3px; }
+  #print-frame .pf-sub { font-size: 11px; color: #999; margin-bottom: 14px; }
+
+  #print-frame .pf-summary { display: flex; gap: 24px; margin-bottom: 8px; }
+  #print-frame .pf-slabel { font-size: 10px; color: #999; text-transform: uppercase; letter-spacing: .04em; }
+  #print-frame .pf-sval { font-size: 15px; font-weight: 600; margin-top: 2px; }
+  #print-frame .pf-sval.ok { color: #1D9E75; }
+  #print-frame .pf-sval.warn { color: #BA7517; }
+  #print-frame .pf-sval.danger { color: #E24B4A; }
+
+  #print-frame .pf-bar { height: 5px; background: #e8e8e8; border-radius: 3px; margin-bottom: 18px; overflow: hidden; }
+  #print-frame .pf-bar-fill { height: 5px; border-radius: 3px; }
+
+  #print-frame .pf-group { margin-bottom: 11px; border: 0.5px solid #e0e0e0; border-radius: 8px; overflow: hidden; page-break-inside: avoid; }
+  #print-frame .pf-ghdr { display: flex; align-items: center; gap: 8px; padding: 7px 12px; background: #f7f7f5; border-bottom: 0.5px solid #e0e0e0; }
+  #print-frame .pf-gdot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+  #print-frame .pf-gname { font-size: 13px; font-weight: 600; flex: 1; }
+  #print-frame .pf-gtotal { font-size: 13px; font-weight: 600; }
+
+  #print-frame .pf-member { border-bottom: 0.5px solid #f0f0f0; }
+  #print-frame .pf-member:last-child { border-bottom: none; }
+  #print-frame .pf-mrow { display: flex; align-items: center; gap: 10px; padding: 5px 12px; }
+  #print-frame .pf-mname { font-size: 12px; font-weight: 500; min-width: 90px; }
+  #print-frame .pf-mhint { flex: 1; font-size: 11px; color: #888; }
+  #print-frame .pf-mamt { font-size: 12px; font-weight: 500; white-space: nowrap; }
+
+  #print-frame .pf-ei { display: flex; align-items: center; gap: 10px; padding: 3px 12px 3px 28px; background: #fafaf9; border-top: 0.5px solid #f0f0f0; }
+  #print-frame .pf-ei-name { flex: 1; font-size: 11px; color: #555; }
+  #print-frame .pf-ei-price { font-size: 11px; font-weight: 500; }
+  #print-frame .pf-empty { padding: 7px 12px; font-size: 11px; color: #bbb; }
+}
