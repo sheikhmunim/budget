@@ -1,4 +1,4 @@
-const CACHE = 'budget-app-v1';
+const CACHE = 'budget-app-v2';
 
 self.addEventListener('install', () => self.skipWaiting());
 
