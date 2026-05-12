@@ -248,54 +248,74 @@ function showAuthOverlay() {
     <div class="auth-card">
       <div class="auth-top-icon"><i class="ti ti-cloud"></i></div>
       <h2>Sync across devices</h2>
-      <p>Enter your email and we'll send you a magic link — no password needed.</p>
-      <div id="auth-form">
+      <p>Enter your email to receive a 6-digit code — no password needed.</p>
+      <div id="auth-step1">
         <input id="auth-email" type="email" placeholder="your@email.com" autocomplete="email" inputmode="email" />
-        <button id="auth-send-btn">Send magic link</button>
+        <button id="auth-send-btn">Send code</button>
         <button class="auth-skip" id="auth-skip-btn">Not now</button>
       </div>
-      <div id="auth-sent" style="display:none">
+      <div id="auth-step2" style="display:none">
         <div class="auth-sent-icon"><i class="ti ti-mail-check"></i></div>
-        <p class="auth-sent-msg">Check your email — tap the link to sign in on this device.</p>
+        <p class="auth-sent-msg">Check your email for a 6-digit code and enter it below.</p>
+        <input id="auth-code" type="text" placeholder="123456" inputmode="numeric" maxlength="6" autocomplete="one-time-code" />
+        <button id="auth-verify-btn">Sign in</button>
         <button class="auth-skip" id="auth-change-btn">Use a different email</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);
 
-  const emailEl   = overlay.querySelector('#auth-email');
-  const sendBtn   = overlay.querySelector('#auth-send-btn');
-  const formEl    = overlay.querySelector('#auth-form');
-  const sentEl    = overlay.querySelector('#auth-sent');
+  const emailEl  = overlay.querySelector('#auth-email');
+  const codeEl   = overlay.querySelector('#auth-code');
+  const sendBtn  = overlay.querySelector('#auth-send-btn');
+  const verifyBtn= overlay.querySelector('#auth-verify-btn');
+  const step1    = overlay.querySelector('#auth-step1');
+  const step2    = overlay.querySelector('#auth-step2');
+  let   sentEmail = '';
 
   emailEl.addEventListener('keydown', e => { if (e.key === 'Enter') sendBtn.click(); });
+  codeEl.addEventListener('keydown',  e => { if (e.key === 'Enter') verifyBtn.click(); });
 
   sendBtn.addEventListener('click', async () => {
     const email = emailEl.value.trim();
     if (!email) { emailEl.focus(); return; }
     sendBtn.disabled    = true;
     sendBtn.textContent = 'Sending…';
-    const { error } = await sb.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: 'https://sheikhmunim.github.io/budget/' }
-    });
+    const { error } = await sb.auth.signInWithOtp({ email });
     if (error) {
       sendBtn.disabled    = false;
-      sendBtn.textContent = 'Send magic link';
-      alert('Could not send link: ' + error.message);
+      sendBtn.textContent = 'Send code';
+      alert('Error: ' + error.message);
     } else {
-      formEl.style.display = 'none';
-      sentEl.style.display = 'block';
+      sentEmail          = email;
+      step1.style.display = 'none';
+      step2.style.display = 'block';
+      codeEl.focus();
     }
   });
 
-  overlay.querySelector('#auth-skip-btn').addEventListener('click', () => {
-    overlay.remove();
+  verifyBtn.addEventListener('click', async () => {
+    const code = codeEl.value.trim();
+    if (code.length < 6) { codeEl.focus(); return; }
+    verifyBtn.disabled    = true;
+    verifyBtn.textContent = 'Verifying…';
+    const { error } = await sb.auth.verifyOtp({ email: sentEmail, token: code, type: 'email' });
+    if (error) {
+      verifyBtn.disabled    = false;
+      verifyBtn.textContent = 'Sign in';
+      codeEl.value = '';
+      alert('Wrong code — please try again.');
+    }
+    // on success, onAuthStateChange fires and handles the rest
   });
 
+  overlay.querySelector('#auth-skip-btn').addEventListener('click', () => overlay.remove());
+
   overlay.querySelector('#auth-change-btn').addEventListener('click', () => {
-    formEl.style.display = 'block';
-    sentEl.style.display = 'none';
+    step1.style.display = 'block';
+    step2.style.display = 'none';
     emailEl.value = '';
+    sendBtn.disabled    = false;
+    sendBtn.textContent = 'Send code';
     emailEl.focus();
   });
 }
