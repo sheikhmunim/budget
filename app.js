@@ -339,13 +339,13 @@ async function initAuth() {
       }
     });
 
-    // Re-fetch from Supabase whenever the app comes back into focus
-    document.addEventListener('visibilitychange', async () => {
+    // Poll every 3 seconds when app is visible
+    setInterval(async () => {
       if (document.visibilityState === 'visible' && currentUser) {
         await loadFromCloud();
         fullRender();
       }
-    });
+    }, 3000);
 
   } catch (err) {
     console.error('Supabase init error:', err);
