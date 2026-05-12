@@ -222,12 +222,21 @@ function showSyncPopover() {
   popover.id    = 'sync-popover';
   popover.innerHTML = `
     <div class="sp-email">${esc(currentUser.email)}</div>
+    <button class="sp-refresh"><i class="ti ti-refresh"></i> Pull latest changes</button>
     <button class="sp-signout">Sign out</button>`;
   document.body.appendChild(popover);
 
   const rect = btn.getBoundingClientRect();
   popover.style.top   = (rect.bottom + 8) + 'px';
   popover.style.right = (window.innerWidth - rect.right) + 'px';
+
+  popover.querySelector('.sp-refresh').addEventListener('click', async () => {
+    popover.remove();
+    updateSyncBtn('syncing');
+    const updated = await loadFromCloud();
+    if (updated) fullRender();
+    updateSyncBtn('synced');
+  });
 
   popover.querySelector('.sp-signout').addEventListener('click', async () => {
     popover.remove();
@@ -340,13 +349,6 @@ async function initAuth() {
       }
     });
 
-    // Poll every 3 seconds — only re-render if cloud had newer data
-    setInterval(async () => {
-      if (document.visibilityState === 'visible' && currentUser) {
-        const updated = await loadFromCloud();
-        if (updated) fullRender();
-      }
-    }, 3000);
 
   } catch (err) {
     console.error('Supabase init error:', err);
