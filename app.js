@@ -339,6 +339,14 @@ async function initAuth() {
       }
     });
 
+    // Re-fetch from Supabase whenever the app comes back into focus
+    document.addEventListener('visibilitychange', async () => {
+      if (document.visibilityState === 'visible' && currentUser) {
+        await loadFromCloud();
+        fullRender();
+      }
+    });
+
   } catch (err) {
     console.error('Supabase init error:', err);
     updateSyncBtn('offline');
