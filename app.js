@@ -482,6 +482,9 @@ async function initAuth() {
     const btn = document.getElementById('refreshBtn');
     btn.disabled = true;
     updateSyncBtn('syncing');
+    clearTimeout(_syncTimer);
+    _syncTimer = null;
+    await doSync();
     const updated = await loadFromCloud();
     if (updated) fullRender();
     updateSyncBtn('synced');
