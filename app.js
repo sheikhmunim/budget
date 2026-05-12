@@ -19,7 +19,8 @@ function fmt(n, trip) {
   return currencySymbol(trip || { currency: 'AUD' }) + (parseFloat(n) || 0).toFixed(0);
 }
 
-function groupTotal(g)   { return g.members.reduce((sum, m) => sum + (parseFloat(m.amt) || 0), 0); }
+function personTotal(m)  { return (m.expenses || []).reduce((s, e) => s + (parseFloat(e.price) || 0), 0); }
+function groupTotal(g)   { return g.members.reduce((sum, m) => sum + personTotal(m), 0); }
 function tripSpent(trip) { return trip.groups.reduce((sum, g) => sum + groupTotal(g), 0); }
 
 function getBudgetStatus(trip) {
@@ -40,7 +41,14 @@ function hydrate(groups) {
     ...g,
     id: g.id || uid(),
     open: g.open || false,
-    members: g.members.map(m => ({ ...m, id: m.id || uid(), amt: m.amt || 0 }))
+    members: g.members.map(m => {
+      let expenses = m.expenses ? m.expenses.map(e => ({ ...e, id: e.id || uid() })) : [];
+      const legacyAmt = parseFloat(m.amt) || 0;
+      if (expenses.length === 0 && legacyAmt > 0) {
+        expenses = [{ id: uid(), item: '', price: legacyAmt }];
+      }
+      return { ...m, id: m.id || uid(), amt: 0, expenses };
+    })
   }));
 }
 
@@ -217,7 +225,7 @@ function renderTripContent() {
   addGroupBtn.addEventListener('click', () => {
     const color = COLORS[trip.groups.length % COLORS.length];
     const icon  = ICONS[trip.groups.length % ICONS.length];
-    trip.groups.push({ id: uid(), name: 'New group', icon, color, open: true, members: [{ id: uid(), name: '', hint: '', amt: 0 }] });
+    trip.groups.push({ id: uid(), name: 'New group', icon, color, open: true, members: [{ id: uid(), name: '', hint: '', amt: 0, expenses: [] }] });
     saveState();
     renderTripContent();
     const inputs = document.querySelectorAll('.group-name-input');
@@ -284,6 +292,10 @@ function updateBudgetDisplay(trip) {
   trip.groups.forEach(g => {
     const totEl = document.getElementById('gt_' + g.id);
     if (totEl) totEl.textContent = fmt(groupTotal(g), trip);
+    g.members.forEach(m => {
+      const ptotEl = document.getElementById('ptotal_' + m.id);
+      if (ptotEl) ptotEl.textContent = fmt(personTotal(m), trip);
+    });
   });
 }
 
@@ -364,7 +376,7 @@ function buildGroupCard(trip, g) {
   addPersonBtn.innerHTML = '<i class="ti ti-plus" style="font-size:13px"></i> Add person';
   addPersonBtn.addEventListener('click', e => {
     e.stopPropagation();
-    g.members.push({ id: uid(), name: '', hint: '', amt: 0 });
+    g.members.push({ id: uid(), name: '', hint: '', amt: 0, expenses: [] });
     g.open = true;
     saveState();
     renderTripContent();
@@ -398,33 +410,76 @@ function buildGroupCard(trip, g) {
 
 // ── Person row ─────────────────────────────────────────────────────────────
 
+function buildExpenseRow(trip, m, e) {
+  const row = document.createElement('div');
+  row.className = 'expense-row';
+  row.innerHTML = `
+    <input class="expense-item-input" value="${esc(e.item)}" placeholder="Item" aria-label="Expense item" />
+    <div class="expense-price-wrap">
+      <input type="number" class="expense-price-input" min="0" step="1" value="${e.price || 0}" aria-label="Price" />
+      <span class="amt-label">${esc(trip.currency || 'AUD')}</span>
+      <button class="icon-btn del" title="Remove expense" aria-label="Remove expense">
+        <i class="ti ti-x" style="font-size:13px"></i>
+      </button>
+    </div>`;
+
+  row.querySelector('.expense-item-input').addEventListener('input', ev => { e.item = ev.target.value; saveState(); });
+  row.querySelector('.expense-price-input').addEventListener('input', ev => {
+    e.price = parseFloat(ev.target.value) || 0;
+    const ptotEl = document.getElementById('ptotal_' + m.id);
+    if (ptotEl) ptotEl.textContent = fmt(personTotal(m), trip);
+    updateBudgetDisplay(trip);
+    saveState();
+  });
+  row.querySelector('.icon-btn.del').addEventListener('click', () => {
+    m.expenses.splice(m.expenses.indexOf(e), 1);
+    saveState();
+    renderTripContent();
+  });
+  return row;
+}
+
 function buildPersonRow(trip, g, m) {
+  const block = document.createElement('div');
+  block.className = 'person-block';
+
   const row = document.createElement('div');
   row.className = 'person-row';
   row.innerHTML = `
     <input class="person-name" value="${esc(m.name)}" placeholder="Name" aria-label="Name" />
     <input class="person-hint" value="${esc(m.hint)}" placeholder="What to buy..." aria-label="Gift idea" />
     <div class="person-amt-wrap">
-      <input type="number" min="0" step="1" value="${m.amt || 0}" aria-label="Amount" />
-      <span class="amt-label">${esc(trip.currency || 'AUD')}</span>
-      <button class="icon-btn del" title="Remove" aria-label="Remove person">
+      <span class="person-total-val" id="ptotal_${m.id}">${fmt(personTotal(m), trip)}</span>
+      <button class="add-expense-btn icon-btn" title="Add expense" aria-label="Add expense">
+        <i class="ti ti-plus" style="font-size:12px"></i>
+      </button>
+      <button class="icon-btn del" title="Remove person" aria-label="Remove person">
         <i class="ti ti-x" style="font-size:13px"></i>
       </button>
     </div>`;
 
   row.querySelector('.person-name').addEventListener('input', e => { m.name = e.target.value; saveState(); });
   row.querySelector('.person-hint').addEventListener('input', e => { m.hint = e.target.value; saveState(); });
-  row.querySelector('input[type=number]').addEventListener('input', e => {
-    m.amt = parseFloat(e.target.value) || 0;
-    updateBudgetDisplay(trip);
+  row.querySelector('.add-expense-btn').addEventListener('click', ev => {
+    ev.stopPropagation();
+    if (!m.expenses) m.expenses = [];
+    const newExp = { id: uid(), item: '', price: 0 };
+    m.expenses.push(newExp);
     saveState();
+    const expRow = buildExpenseRow(trip, m, newExp);
+    block.appendChild(expRow);
+    expRow.querySelector('.expense-item-input').focus();
   });
   row.querySelector('.icon-btn.del').addEventListener('click', () => {
     g.members.splice(g.members.indexOf(m), 1);
     saveState();
     renderTripContent();
   });
-  return row;
+
+  block.appendChild(row);
+  (m.expenses || []).forEach(e => block.appendChild(buildExpenseRow(trip, m, e)));
+
+  return block;
 }
 
 // ── Init ───────────────────────────────────────────────────────────────────

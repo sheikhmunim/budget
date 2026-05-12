@@ -268,14 +268,66 @@ body {
 .group-body { border-top: 0.5px solid var(--border); }
 
 /* ── Person rows ── */
+.person-block {
+  border-bottom: 0.5px solid var(--border);
+}
+.person-block:last-of-type { border-bottom: none; }
+
 .person-row {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 8px 1.25rem;
-  border-bottom: 0.5px solid var(--border);
 }
-.person-row:last-of-type { border-bottom: none; }
+
+.person-total-val {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  min-width: 48px;
+  text-align: right;
+}
+
+.add-expense-btn { color: var(--green); }
+.add-expense-btn:hover { background: rgba(29, 158, 117, 0.12) !important; color: var(--green) !important; }
+
+/* ── Expense item rows ── */
+.expense-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 1.25rem 6px 2.5rem;
+  border-top: 0.5px solid var(--border);
+  background: var(--bg-secondary);
+}
+
+.expense-item-input {
+  flex: 1;
+  font-size: 12px;
+  color: var(--text);
+  background: transparent;
+  border: none;
+  padding: 3px 5px;
+  border-radius: 4px;
+  min-width: 60px;
+  font-family: var(--font);
+}
+.expense-item-input:focus { outline: none; background: var(--bg); border-radius: 4px; }
+
+.expense-price-wrap { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
+
+.expense-price-input {
+  width: 68px;
+  font-size: 12px;
+  text-align: right;
+  padding: 4px 6px;
+  border: 0.5px solid var(--border-md);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+}
+.expense-price-input:focus { outline: none; border-color: var(--text); }
 
 .person-name {
   flex: 1.2;
@@ -390,4 +442,7 @@ body {
 
   .add-person-btn { padding: 10px 1rem; }
   .add-group-btn  { padding: 0.9rem; }
+
+  .expense-row { padding: 6px 1rem 6px 1.5rem; gap: 8px; }
+  .expense-price-input { width: 60px; }
 }
