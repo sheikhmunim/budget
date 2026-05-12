@@ -102,11 +102,13 @@ if (sbReady) {
   catch (e) { console.error('Supabase client failed to init:', e); }
 }
 
-// Debounced sync — fires 1.5 s after last change
+// Debounced sync — fires 1.5 s after last change, or immediately when app is hidden
 let _syncTimer = null;
 function schedulSync() {
   if (!sbReady || !currentUser) return;
   clearTimeout(_syncTimer);
+  // If the page is already hidden (e.g. user switched apps mid-edit), push immediately
+  if (document.visibilityState === 'hidden') { doSync(); return; }
   _syncTimer = setTimeout(doSync, 1500);
 }
 
@@ -459,6 +461,15 @@ function showJoinModal() {
 
 async function initAuth() {
   fullRender();
+
+  // Flush any pending sync the instant the app goes to background (iOS kills timers)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden' && currentUser && _syncTimer !== null) {
+      clearTimeout(_syncTimer);
+      _syncTimer = null;
+      doSync();
+    }
+  });
 
   document.getElementById('syncBtn').addEventListener('click', () => {
     if (!sbReady) return;
