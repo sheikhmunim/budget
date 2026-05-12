@@ -298,40 +298,48 @@ function showAuthOverlay() {
 }
 
 async function initAuth() {
-  if (!sbReady) { fullRender(); return; } // Supabase not configured yet
+  fullRender(); // always render local state immediately
 
-  fullRender(); // show local state immediately while we check auth
-
-  const { data: { session } } = await sb.auth.getSession();
-
-  if (session) {
-    currentUser = session.user;
-    await loadFromCloud();
-    updateSyncBtn('synced');
-    fullRender(); // re-render with cloud data if it was newer
-  } else {
-    updateSyncBtn('offline');
-    if (!sessionStorage.getItem('auth_skipped')) showAuthOverlay();
-  }
-
-  // Handle magic link redirect and future sign-in/out events
-  sb.auth.onAuthStateChange(async (event, session) => {
-    if (event === 'SIGNED_IN' && session) {
-      currentUser = session.user;
-      document.getElementById('auth-overlay')?.remove();
-      await loadFromCloud();
-      updateSyncBtn('synced');
-      fullRender();
-    } else if (event === 'SIGNED_OUT') {
-      currentUser = null;
-      updateSyncBtn('offline');
-    }
-  });
-
+  // Wire up sync button regardless of Supabase state
   document.getElementById('syncBtn').addEventListener('click', () => {
+    if (!sbReady) return;
     if (currentUser) showSyncPopover();
     else { sessionStorage.removeItem('auth_skipped'); showAuthOverlay(); }
   });
+
+  if (!sbReady) return;
+
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+
+    if (session) {
+      currentUser = session.user;
+      await loadFromCloud();
+      updateSyncBtn('synced');
+      fullRender();
+    } else {
+      updateSyncBtn('offline');
+      if (!sessionStorage.getItem('auth_skipped')) showAuthOverlay();
+    }
+
+    sb.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        currentUser = session.user;
+        document.getElementById('auth-overlay')?.remove();
+        await loadFromCloud();
+        updateSyncBtn('synced');
+        fullRender();
+      } else if (event === 'SIGNED_OUT') {
+        currentUser = null;
+        updateSyncBtn('offline');
+      }
+    });
+
+  } catch (err) {
+    console.error('Supabase init error:', err);
+    updateSyncBtn('offline');
+    if (!sessionStorage.getItem('auth_skipped')) showAuthOverlay();
+  }
 }
 
 // ── Tabs ───────────────────────────────────────────────────────────────────
