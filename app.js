@@ -86,7 +86,15 @@ function loadState() {
 function saveState() {
   state._ts = Date.now();
   try { localStorage.setItem('giftplanner_v2', JSON.stringify(state)); } catch (e) {}
-  schedulSync();
+  scheduleSync();
+}
+
+function saveLocal() {
+  try { localStorage.setItem('giftplanner_v2', JSON.stringify(state)); } catch (_) {}
+}
+
+function withTimeout(promise, ms) {
+  return Promise.race([promise, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
 }
 
 let state = loadState();
@@ -104,7 +112,10 @@ if (sbReady) {
 
 // Debounced sync — fires 1.5 s after last change, or immediately when app is hidden
 let _syncTimer = null;
-function schedulSync() {
+let _syncInFlight = false;
+let _hiddenAt = 0;
+
+function scheduleSync() {
   if (!sbReady || !currentUser) return;
   clearTimeout(_syncTimer);
   // If the page is already hidden (e.g. user switched apps mid-edit), push immediately
@@ -112,108 +123,100 @@ function schedulSync() {
   _syncTimer = setTimeout(doSync, 1500);
 }
 
-async function doSync() {
-  if (!currentUser) return;
+// doSync(pullFirst=false): push-only from debounce; pull-then-push from load/refresh.
+// Keeping these two paths separate prevents a debounce push from overwriting
+// in-progress edits with a just-fetched remote state.
+async function doSync(pullFirst = false) {
+  if (!currentUser || _syncInFlight) return;
+  _syncInFlight = true;
   updateSyncBtn('syncing');
+  let success = false;
   try {
-    const ts = new Date().toISOString();
-    const upsertPromise = sb.from('user_state').upsert(
-      { user_id: currentUser.id, state_json: state, updated_at: ts },
-      { onConflict: 'user_id' }
-    );
-    const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000));
-    const { error } = await Promise.race([upsertPromise, timeout]);
-    if (!error) {
-      // Align local _ts with push time so the next load sees "in-sync" and skips a redundant push
-      state._ts = new Date(ts).getTime();
-      try { localStorage.setItem('giftplanner_v2', JSON.stringify(state)); } catch (_) {}
-    } else {
-      console.error('Sync error:', error.message, error);
+    if (pullFirst) {
+      // ── Pull main user state ─────────────────────────────────────────────
+      const { data, error: pullErr } = await withTimeout(
+        sb.from('user_state').select('state_json, updated_at').eq('user_id', currentUser.id).single(),
+        8000
+      );
+      // PGRST116 = no row yet (first ever sync) — not an error
+      if (pullErr && pullErr.code !== 'PGRST116') throw pullErr;
+      if (data) {
+        const remoteTs = new Date(data.updated_at).getTime();
+        if (remoteTs > (state._ts || 0)) {
+          const p = data.state_json;
+          state = { activeId: p.activeId, trips: p.trips.map(t => ({ ...t, groups: hydrate(t.groups || []) })), _ts: remoteTs };
+          saveLocal();
+          fullRender();
+        }
+      }
+
+      // ── Pull shared trips ────────────────────────────────────────────────
+      let sharedUpdated = false;
+      for (const trip of [...state.trips].filter(t => t.shareCode)) {
+        const updated = await pullSharedTrip(trip);
+        if (updated) {
+          const idx = state.trips.findIndex(t => t.id === trip.id);
+          if (idx !== -1) { state.trips[idx] = { ...updated, groups: hydrate(updated.groups || []) }; sharedUpdated = true; }
+        }
+      }
+      if (sharedUpdated) { saveLocal(); fullRender(); }
     }
 
-    // Push all shared trips
+    // ── Push main state ──────────────────────────────────────────────────
+    const ts = new Date().toISOString();
+    const { error: pushErr } = await withTimeout(
+      sb.from('user_state').upsert({ user_id: currentUser.id, state_json: state, updated_at: ts }, { onConflict: 'user_id' }),
+      8000
+    );
+    if (pushErr) throw pushErr;
+    state._ts = new Date(ts).getTime();
+    saveLocal();
+
+    // ── Push shared trips ────────────────────────────────────────────────
     await Promise.all(state.trips.filter(t => t.shareCode).map(pushSharedTrip));
+
+    success = true;
   } catch (e) {
     console.error('Sync failed:', e.message);
+  } finally {
+    _syncInFlight = false;
+    updateSyncBtn(success ? 'synced' : 'error');
   }
-  updateSyncBtn('synced');
 }
 
 async function pushSharedTrip(trip) {
   if (!currentUser || !trip.shareCode || !sb) return;
   try {
     const ts = new Date().toISOString();
-    const { error } = await sb.from('shared_trips')
-      .upsert({ code: trip.shareCode, state_json: trip, updated_at: ts }, { onConflict: 'code' });
-    if (error) {
-      console.error('Shared trip push error:', error.message);
-    }
-  } catch (e) {
-    console.error('Shared trip push failed:', e.message);
-  }
+    const { error } = await withTimeout(
+      sb.from('shared_trips').upsert({ code: trip.shareCode, state_json: trip, updated_at: ts }, { onConflict: 'code' }),
+      8000
+    );
+    if (error) console.error('Shared trip push error:', error.message);
+  } catch (e) { console.error('Shared trip push failed:', e.message); }
 }
 
 async function pullSharedTrip(trip) {
   if (!trip.shareCode || !sb) return null;
   try {
-    const { data } = await sb.from('shared_trips')
-      .select('state_json, updated_at')
-      .eq('code', trip.shareCode)
-      .single();
+    const { data, error } = await withTimeout(
+      sb.from('shared_trips').select('state_json, updated_at').eq('code', trip.shareCode).single(),
+      8000
+    );
+    if (error) { console.error('Pull shared trip error:', error.message); return null; }
     if (!data) return null;
     const remoteTs = new Date(data.updated_at).getTime();
     if (remoteTs > (trip._ts || 0)) {
       return { ...data.state_json, shareCode: trip.shareCode, _ts: remoteTs };
     }
     return null;
-  } catch (_) { return null; }
-}
-
-async function loadFromCloud() {
-  let anyUpdate = false;
-
-  // Pull private user state
-  try {
-    const { data } = await sb.from('user_state')
-      .select('state_json, updated_at')
-      .eq('user_id', currentUser.id)
-      .single();
-
-    if (!data) { doSync(); return false; }
-
-    const remoteTs = new Date(data.updated_at).getTime();
-    if (remoteTs > (state._ts || 0)) {
-      const p = data.state_json;
-      state = { activeId: p.activeId, trips: p.trips.map(t => ({ ...t, groups: hydrate(t.groups || []) })), _ts: remoteTs };
-      try { localStorage.setItem('giftplanner_v2', JSON.stringify(state)); } catch (_) {}
-      anyUpdate = true;
-    }
-  } catch (_) {}
-
-  // Pull updates from collaborators on shared trips
-  const sharedTrips = state.trips.filter(t => t.shareCode);
-  for (const trip of sharedTrips) {
-    const updated = await pullSharedTrip(trip);
-    if (updated) {
-      const idx = state.trips.findIndex(t => t.id === trip.id);
-      if (idx !== -1) {
-        state.trips[idx] = { ...updated, groups: hydrate(updated.groups || []) };
-        anyUpdate = true;
-      }
-    }
-  }
-
-  if (anyUpdate) {
-    try { localStorage.setItem('giftplanner_v2', JSON.stringify(state)); } catch (_) {}
-  }
-
-  return anyUpdate;
+  } catch (e) { console.error('Pull shared trip failed:', e.message); return null; }
 }
 
 function updateSyncBtn(s) {
   const btn = document.getElementById('syncBtn');
   if (!btn) return;
-  const icon = { synced: 'ti-cloud-check', syncing: 'ti-cloud-upload', offline: 'ti-cloud-off' }[s] || 'ti-cloud-off';
+  const icon = { synced: 'ti-cloud-check', syncing: 'ti-cloud-upload', offline: 'ti-cloud-off', error: 'ti-cloud-x' }[s] || 'ti-cloud-off';
   btn.dataset.state = s;
   btn.innerHTML = `<i class="ti ${icon}"></i>`;
 }
@@ -226,7 +229,7 @@ function showSyncPopover() {
   const popover = document.createElement('div');
   popover.id    = 'sync-popover';
   popover.innerHTML = `
-    <div class="sp-email">${esc(currentUser.email)}</div>
+    <div class="sp-email">${esc(currentUser?.email ?? '')}</div>
     <button class="sp-signout">Sign out</button>`;
   document.body.appendChild(popover);
 
@@ -478,12 +481,13 @@ function showJoinModal() {
 async function initAuth() {
   fullRender();
 
-  // Flush any pending sync the instant the app goes to background (iOS kills timers)
+  // Flush pending sync when app goes to background; pull-first when returning after 30+ seconds
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden' && currentUser && _syncTimer !== null) {
-      clearTimeout(_syncTimer);
-      _syncTimer = null;
-      doSync();
+    if (document.visibilityState === 'hidden' && currentUser) {
+      _hiddenAt = Date.now();
+      if (_syncTimer !== null) { clearTimeout(_syncTimer); _syncTimer = null; doSync(); }
+    } else if (document.visibilityState === 'visible' && currentUser && (Date.now() - _hiddenAt) > 30000) {
+      doSync(true);
     }
   });
 
@@ -497,17 +501,11 @@ async function initAuth() {
     if (!currentUser) return;
     const btn = document.getElementById('refreshBtn');
     btn.disabled = true;
-    updateSyncBtn('syncing');
     clearTimeout(_syncTimer);
     _syncTimer = null;
-    try {
-      const updated = await loadFromCloud();
-      if (updated) fullRender();
-      else await doSync();
-    } finally {
-      updateSyncBtn('synced');
-      btn.disabled = false;
-    }
+    await doSync(true);
+    btn.disabled = false;
+    fullRender();
   });
 
   if (!sbReady || !sb) { showAuthOverlay(); return; }
@@ -517,10 +515,8 @@ async function initAuth() {
 
     if (session) {
       currentUser = session.user;
-      const updated = await loadFromCloud();
-      if (!updated) doSync();
-      updateSyncBtn('synced');
       document.getElementById('refreshBtn').style.display = '';
+      await doSync(true);
       fullRender();
     } else {
       updateSyncBtn('offline');
@@ -531,10 +527,8 @@ async function initAuth() {
       if (event === 'SIGNED_IN' && session) {
         currentUser = session.user;
         document.getElementById('auth-overlay')?.remove();
-        const updated = await loadFromCloud();
-        if (!updated) doSync();
-        updateSyncBtn('synced');
         document.getElementById('refreshBtn').style.display = '';
+        await doSync(true);
         fullRender();
       } else if (event === 'SIGNED_OUT') {
         currentUser = null;
